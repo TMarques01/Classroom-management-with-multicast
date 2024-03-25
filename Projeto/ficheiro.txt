@@ -1,2 +1,2 @@
-asdsd
-asdfdaasd
+utilizador;password;administrador
+tiago;password;aluno

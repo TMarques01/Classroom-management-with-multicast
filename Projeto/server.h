@@ -1,15 +1,20 @@
-// server.h
+//server.h
 
 #ifndef SERVER_H
 #define SERVER_H
 
 #include <arpa/inet.h>
-#include <sys/socket.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <netdb.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sys/socket.h>
 
 
-#define BUFLEN 512  // Tamanho do buffer
+#define BUFLEN 1024  // Tamanho do buffer
 #define TAM 64      // Tamanho do username/password
 
 // Estrutura para armazenar informações do utilizador
@@ -34,5 +39,6 @@ lista cria();
 void ler_ficheiro(FILE *file, lista lista_utilizadores);
 void insere_utilizador(lista lista_utilizadores, struct utilizador u);
 int confirmar_login_administrador(lista lista_utilizadores, char username_login[TAM], char password_login[TAM]);
+void process_client(int client_fd);
 
 #endif // SERVER_H
