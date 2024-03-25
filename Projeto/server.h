@@ -12,6 +12,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
+#include <signal.h>
 
 
 #define BUFLEN 1024  // Tamanho do buffer
@@ -40,5 +41,6 @@ void ler_ficheiro(FILE *file, lista lista_utilizadores);
 void insere_utilizador(lista lista_utilizadores, struct utilizador u);
 int confirmar_login_administrador(lista lista_utilizadores, char username_login[TAM], char password_login[TAM]);
 void process_client(int client_fd);
+void treat_signal(int fd);
 
 #endif // SERVER_H

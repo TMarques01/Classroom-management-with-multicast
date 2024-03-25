@@ -4,6 +4,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+struct sockaddr_in addr, client_addr, addr_server, addr_client;
+int fd, client, client_addr_size, s,recv_len;
+socklen_t slen = sizeof(addr_client);
+
 void erro(char *s){ 
 	perror(s);
 	exit(1);
@@ -94,8 +98,14 @@ void listar_utilizadores(lista l) {
 void process_client(int client_fd){
 }
 
-int main(int argc, char *argv[]){
+//Funcao para lidar com o sinal (TCP)
+void treat_signal(int sig){
+    printf("Fechar o socket\n");
+    close(fd);
+    exit(0);
+}
 
+int main(int argc, char *argv[]){
 
     if (argc != 4) {
         printf("class_server {PORTO_TURMAS} {PORTO_CONFIG} {ficheiro configuracao}\n");
@@ -112,11 +122,9 @@ int main(int argc, char *argv[]){
     ler_ficheiro(f,lista_utilizadores);
     
     //SERVIDOR TCP
-    if (fork() == 0){
-        struct sockaddr_in addr, client_addr;
-        int fd, client;
-        int client_addr_size;
-
+    pid_t TCP_process = fork();
+    if (TCP_process == 0){
+        
         bzero((void *) &addr, sizeof(addr));
         addr.sin_family = AF_INET;
         addr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -129,7 +137,10 @@ int main(int argc, char *argv[]){
         if( listen(fd, 5) < 0)
             erro("na funcao listen");
         client_addr_size = sizeof(client_addr);
-        while (1) {
+
+        signal(SIGTERM, treat_signal);
+
+        while (1){
 
             while(waitpid(-1,NULL,WNOHANG)>0);
             client = accept(fd,(struct sockaddr *)&client_addr,(socklen_t *)&client_addr_size); 
@@ -142,12 +153,11 @@ int main(int argc, char *argv[]){
                 }
             }
         }
-
+        
+        close(fd);
+          
     //SERVIDOR UDP
     } else {
-        struct sockaddr_in addr_server, addr_client;
-        int s,recv_len;
-        socklen_t slen = sizeof(addr_client);
 
         char buf[BUFLEN];
 
@@ -232,7 +242,6 @@ int main(int argc, char *argv[]){
                             sendto(s, "Dados incorretos. Tente outra vez.\n", strlen("Dados incorretos. Tente outra vez.\n"), 0, (struct sockaddr *) &addr_client, slen);
                             memset(username, 0, sizeof(username));
                             memset(password, 0, sizeof(password));
-
                         }
                     }
 
@@ -254,13 +263,14 @@ int main(int argc, char *argv[]){
             //SAIR DO SERVIDOR
             } else {
                 sendto(s, "A fechar o servidor...\n", strlen("A fechar o servidor...\n"), 0, (struct sockaddr *) &addr_client, slen);
+                kill(TCP_process, SIGTERM);
+                waitpid(TCP_process, NULL, 0); // Espera o filho terminar
                 break;
             }
         }
         //Fechar socket UDP
         printf("A fechar servidor UDP\n");
-        close (s);
-        
+        close (s);  
     }
 
     return 0;
