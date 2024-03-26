@@ -1,8 +1,3 @@
-/**********************************************************************
- * CLIENTE liga ao servidor (definido em argv[1]) no porto especificado
- * (em argv[2]), escrevendo a palavra predefinida (em argv[3]).
- * USO: >cliente <enderecoServidor>  <porto>  <Palavra>
- **********************************************************************/
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -28,6 +23,7 @@ int main(int argc, char *argv[]) {
     exit(-1);
   }
 
+
   strcpy(endServer, argv[1]);
   if ((hostPtr = gethostbyname(endServer)) == 0)
     erro("Não consegui obter endereço");
@@ -40,12 +36,6 @@ int main(int argc, char *argv[]) {
   if ((fd = socket(AF_INET,SOCK_STREAM,0)) == -1) erro("socket");
   if (connect(fd,(struct sockaddr *)&addr,sizeof (addr)) < 0) erro("Connect");
 
-  // Ler a mensagem inicial
-  nread = read(fd, buffer, BUFF_SIZE-1);
-  if (nread > 0){
-    buffer[nread] = '\0';
-    printf("%s\n", buffer);
-  }
   
   while (1) { // Ciclo para o cliente enviar mais do que uma mensagem
 
@@ -53,6 +43,10 @@ int main(int argc, char *argv[]) {
     fgets(buffer, BUFF_SIZE, stdin);
 
     buffer[strcspn(buffer, "\n")] = 0;
+
+    if (strcmp(buffer, "QUIT_CLIENT") == 0) {
+      break;
+    }
 
     // Enviar o valor para o servidor
     write(fd, buffer, strlen(buffer) + 1);
@@ -62,11 +56,6 @@ int main(int argc, char *argv[]) {
     if (nread > 0) {
       buffer[nread] = '\0';
       printf("%s\n", buffer);
-    }
-    
-    // Caso a mensagem recebida, seja a mensagem de despedida, o cliente fecha
-    if (strcmp(buffer, "Ate logo!") == 0) {
-      break;
     }
   }  
   close(fd);

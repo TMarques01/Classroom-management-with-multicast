@@ -37,10 +37,10 @@ typedef no_lista *lista;
 // Protótipos das funções
 void erro(char *s);
 lista cria();
-void ler_ficheiro(FILE *file, lista lista_utilizadores);
+void ler_ficheiro(lista lista_utilizadores, char *ficheiro);
 void insere_utilizador(lista lista_utilizadores, struct utilizador u);
 int confirmar_login_administrador(lista lista_utilizadores, char username_login[TAM], char password_login[TAM]);
-void process_client(int client_fd);
+void process_client(int client_fd, char *ficheiro);
 void treat_signal(int fd);
 
 #endif // SERVER_H

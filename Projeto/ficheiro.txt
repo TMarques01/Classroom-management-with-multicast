@@ -1,2 +1,3 @@
 utilizador;password;administrador
 tiago;password;aluno
+hugo;password;professor

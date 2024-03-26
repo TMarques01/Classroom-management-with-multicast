@@ -26,7 +26,11 @@ lista cria (){
 }
 
 //Função para ler ficheiro e adicionar à lista ligada
-void ler_ficheiro(FILE *file, lista lista_utilizadores) {
+void ler_ficheiro(lista lista_utilizadores, char *ficheiro) {
+
+    FILE *file;
+    file = fopen(ficheiro, "r");
+
     char *token;
     char line[BUFLEN];
 
@@ -60,7 +64,7 @@ void insere_utilizador(lista lista_utilizadores, struct utilizador u) {
 }
 
 //Funcao para confirmar o login do administrador
-int confirmar_login_administrador(lista lista_utilizadores, char username_login[TAM], char password_login[TAM]){
+int confirmar_login(lista lista_utilizadores, char username_login[TAM], char password_login[TAM]){
 
     lista aux = lista_utilizadores -> proximo;
     int count = 1;
@@ -76,8 +80,10 @@ int confirmar_login_administrador(lista lista_utilizadores, char username_login[
                 count = 0;
             }
             //Se tiver outro cargo
-            else {
+            else if (strcmp(aux->u.role,"aluno") == 0){
                 count = 2;
+            } else if (strcmp(aux->u.role,"professor") == 0){
+                count = 3;
             }
         }
         aux = aux -> proximo;
@@ -95,7 +101,108 @@ void listar_utilizadores(lista l) {
     }
 }
 
-void process_client(int client_fd){
+//Função para clientes TCP
+void process_client(int client_fd, char *ficheiro){
+
+    lista lista_utilizadores_tcp = cria(); //Cria a lista ligada já com um elemento para evitar o caso de ser nulo
+    ler_ficheiro(lista_utilizadores_tcp, ficheiro);
+
+    int login = 0;
+    int login_verificar = 0;
+    int nread = 1;
+    char buffer[BUFLEN];
+
+    while(1) {
+        nread = read(client_fd, buffer, BUFLEN-1);
+        if (nread <= 0) break; 
+        buffer[nread] = '\0';
+
+        char username[TAM];
+        char password[TAM];
+
+        printf("%s\n", buffer);
+
+        // Validar os dados (0 = nao logado; 1 = aluno; 2 = professor)
+        if (login == 0){
+
+            // Guardar primeiramente os dados
+            int aux_dados = 0;
+            char *token = strtok(buffer," ");
+            while (token != NULL){
+                if (aux_dados == 0){
+                    if (strcmp(token,"LOGIN") == 0){
+                        token =strtok(NULL," ");
+                        aux_dados++;
+                        login_verificar = 1;
+                    } else {
+                        write(client_fd, "LOGIN {username} {password}: ", strlen("LOGIN {username} {password}: "));
+                        login_verificar = 0;
+                        break;
+                    }
+                }
+                else if (aux_dados == 1){
+                    strcpy(username, token);
+                    username[strcspn(username, "\n")] = '\0';
+                    token = strtok(NULL," ");
+                    aux_dados++;
+                } else if (aux_dados == 2){
+                    strcpy(password, token);
+                    password[strcspn(password, "\n")] = '\0';  
+                    token = strtok(NULL," ");
+                }  
+            }
+
+            if (login_verificar == 1){
+                //Validação dos dados
+                int confirmacao_login = confirmar_login(lista_utilizadores_tcp, username, password);
+                if (confirmacao_login == 2){ // caso seja aluno
+                    login = 1;
+                    write(client_fd, "OK", strlen("OK"));
+
+                } else if (confirmacao_login == 3){ // caso seja professor
+                    login = 2;
+                    write(client_fd, "OK", strlen("OK"));
+
+                } else if (confirmacao_login != 2 || confirmacao_login != 3){
+                    login = 0;
+                    write(client_fd, "REJECTED", strlen("REJECTED"));
+                    memset(username, 0, sizeof(username));
+                    memset(password, 0, sizeof(password));
+                }
+            }
+        // Login efetuado
+        } else if (login == 1 || login == 2){
+
+            if (strncmp (buffer,"LIST_CLASSES", 12) == 0){
+                write(client_fd, "LIST_CLASSES entrou", strlen("LIST_CLASSES entrou"));
+            } else if (strncmp(buffer, "LIST_SUBSCRIBED", 15) == 0){
+                write(client_fd, "LIST_SUBSCRIBED entrou", strlen("LIST_SUBSCRIBED entrou"));
+            } else {
+                if (login == 1){ // Caso seja aluno
+                //printf("Aluno entrou\n");
+
+                    if (strncmp(buffer,"SUBSCRIBE_CLASS", 15) == 0){
+                        write(client_fd, "SUBSCRIBE_CLASS entrou", strlen("SUBSCRIBE_CLASS entrou"));
+                    } else {
+                        write(client_fd, "Argumentos incorretos", strlen("Argumentos incorretos"));
+                    } 
+                }
+                else if (login == 2){ // Caso seja professor
+                    //printf("Professor entrou\n");
+                    if (strncmp (buffer,"CREAT_CLASS", 11) == 0){
+                        write(client_fd,"CREAT_CLASS entrou",strlen("CREAT_CLASS entrou"));
+                    } else if (strncmp(buffer, "SEND", 4) == 0){
+                        write(client_fd,"SEND entrou", strlen("SEND entrou"));
+                    } else {
+                        write(client_fd, "Argumentos incorretos", strlen("Argumentos incorretos"));
+                    }       
+                } 
+            }
+        }
+    }
+
+    printf("A fechar cliente...\n");
+    close(client_fd);
 }
 
 //Funcao para lidar com o sinal (TCP)
@@ -117,9 +224,7 @@ int main(int argc, char *argv[]){
     if (f == NULL) {
         erro("Erro ao abrir ficheiro\n");
     }
-
-    lista lista_utilizadores = cria(); //Cria a lista ligada já com um elemento para evitar o caso de ser nulo
-    ler_ficheiro(f,lista_utilizadores);
+    fclose(f);
     
     //SERVIDOR TCP
     pid_t TCP_process = fork();
@@ -138,6 +243,7 @@ int main(int argc, char *argv[]){
             erro("na funcao listen");
         client_addr_size = sizeof(client_addr);
 
+        //Sinal a ser recebido para terminar processo do TCP
         signal(SIGTERM, treat_signal);
 
         while (1){
@@ -146,8 +252,10 @@ int main(int argc, char *argv[]){
             client = accept(fd,(struct sockaddr *)&client_addr,(socklen_t *)&client_addr_size); 
             if (client > 0) {
                 if (fork() == 0) {
+                    
                     close(fd);
-                    process_client(client);
+                    printf("Novo cliente!\n");
+                    process_client(client,argv[3]);
                     close(client);
                     exit(0);
                 }
@@ -158,6 +266,9 @@ int main(int argc, char *argv[]){
           
     //SERVIDOR UDP
     } else {
+
+        lista lista_utilizadores = cria(); //Cria a lista ligada já com um elemento para evitar o caso de ser nulo
+        ler_ficheiro(lista_utilizadores, argv[3]);
 
         char buf[BUFLEN];
 
@@ -190,89 +301,80 @@ int main(int argc, char *argv[]){
             // Limpa o buffer buf para receber mais mensagens
             buf[recv_len] = '\0';
 
-            printf("Recebi: %s", buf);
-
-            if (strcmp(buf,"QUIT_SERVER\n") != 0){
+            printf("Administrador: %s", buf);
 
                 // Condição para fazer login
-                if (login == 0){
+            if (login == 0){
 
-                    char username[TAM];
-                    char password[TAM];
+                char username[TAM];
+                char password[TAM];
 
-                    // Validar os dados
-                    // Guardar primeiramente os dados
-                    int aux_dados = 0;
-                    char *token = strtok(buf," ");
-                    while (token != NULL){
-                        if (aux_dados == 0){
-                            if (strcmp(token,"LOGIN") == 0){
-                                token =strtok(NULL," ");
-                                aux_dados++;
-                                login_verificar = 1;
-                            } else {
-                                sendto(s, "LOGIN {username} {password}\n", strlen("LOGIN {username} {password}\n"), 0, (struct sockaddr *) &addr_client, slen);
-                                login_verificar = 0;
-                                break;
-                            }
-                        }
-                        else if (aux_dados == 1){
-                            strcpy(username, token);
-                            username[strcspn(username, "\n")] = '\0';
-                            token = strtok(NULL," ");
+                // Validar os dados
+                // Guardar primeiramente os dados
+                int aux_dados = 0;
+                char *token = strtok(buf," ");
+                while (token != NULL){
+                    if (aux_dados == 0){
+                        if (strcmp(token,"LOGIN") == 0){
+                            token =strtok(NULL," ");
                             aux_dados++;
-                        } else if (aux_dados == 2){
-                            strcpy(password, token);
-                            password[strcspn(password, "\n")] = '\0';  
-                            token = strtok(NULL," ");
-                        }  
-                    }
-
-                    if(login_verificar == 1){
-                        //Validação dos dados
-                        int confirmacao_login = confirmar_login_administrador(lista_utilizadores, username, password);
-                        if (confirmacao_login == 0){
-                            login = 1;
-                            sendto(s, "Login efetuado com sucesso. Bem-vindo\n", strlen("Login efetuado com sucesso. Bem-vindo\n"), 0, (struct sockaddr *) &addr_client, slen);
-
-                        } else if (confirmacao_login == 2){
-                            sendto(s, "Cargo nao admitido.\n", strlen("Cargo nao admitido.\n"), 0, (struct sockaddr *) &addr_client, slen);
+                            login_verificar = 1;
                         } else {
-                            login = 0;
-                            sendto(s, "Dados incorretos. Tente outra vez.\n", strlen("Dados incorretos. Tente outra vez.\n"), 0, (struct sockaddr *) &addr_client, slen);
-                            memset(username, 0, sizeof(username));
-                            memset(password, 0, sizeof(password));
+                            sendto(s, "LOGIN {username} {password}\n", strlen("LOGIN {username} {password}\n"), 0, (struct sockaddr *) &addr_client, slen);
+                            login_verificar = 0;
+                            break;
                         }
                     }
+                    else if (aux_dados == 1){
+                        strcpy(username, token);
+                        username[strcspn(username, "\n")] = '\0';
+                        token = strtok(NULL," ");
+                        aux_dados++;
+                    } else if (aux_dados == 2){
+                        strcpy(password, token);
+                        password[strcspn(password, "\n")] = '\0';  
+                        token = strtok(NULL," ");
+                    }  
+                }
 
-                    
-                // SE JÁ ESTIVER LOGADO
-                } else if (login == 1){
-                    if (strncmp (buf,"ADD_USER", 8) == 0){
-                        printf("ADD_USER entrou\n");
-                    } else if (strncmp(buf, "DEL", 3) == 0){
-                        printf("DEL entrou\n");
-                    } else if (strncmp(buf,"LIST", 4) == 0){
-                        printf("LIST entrou\n");
-                        listar_utilizadores(lista_utilizadores);
+                if(login_verificar == 1){
+                    //Validação dos dados
+                    int confirmacao_login = confirmar_login(lista_utilizadores, username, password);
+                    if (confirmacao_login == 0){
+                        login = 1;
+                        sendto(s, "OK\n", strlen("OK\n"), 0, (struct sockaddr *) &addr_client, slen);
                     } else {
-                        sendto(s, "Argumentos incorretos\n", strlen("Argumentos incorretos\n"), 0, (struct sockaddr *) &addr_client, slen);
-                    }   
-                }  
+                        login = 0;
+                        sendto(s, "REJECTED\n", strlen("REJECTED\n"), 0, (struct sockaddr *) &addr_client, slen);
+                        memset(username, 0, sizeof(username));
+                        memset(password, 0, sizeof(password));
+                    }
+                }
 
-            //SAIR DO SERVIDOR
-            } else {
-                sendto(s, "A fechar o servidor...\n", strlen("A fechar o servidor...\n"), 0, (struct sockaddr *) &addr_client, slen);
-                kill(TCP_process, SIGTERM);
-                waitpid(TCP_process, NULL, 0); // Espera o filho terminar
-                break;
+                
+            // SE JÁ ESTIVER LOGADO
+            } else if (login == 1){
+                if (strncmp (buf,"ADD_USER", 8) == 0){
+                    printf("ADD_USER entrou\n");
+                } else if (strncmp(buf, "DEL", 3) == 0){
+                    printf("DEL entrou\n");
+                } else if (strncmp(buf,"LIST", 4) == 0){
+                    printf("LIST entrou\n");
+                    listar_utilizadores(lista_utilizadores);
+                } else if (strncmp(buf,"QUIT_SERVER",11) == 0) { //SAIR DO SERVIDOR
+                    sendto(s, "A fechar o servidor...\n", strlen("A fechar o servidor...\n"), 0, (struct sockaddr *) &addr_client, slen);
+                    kill(TCP_process, SIGTERM);
+                    waitpid(TCP_process, NULL, 0); // Espera o filho terminar
+                    break;
+                } else {
+                    sendto(s, "Argumentos incorretos\n", strlen("Argumentos incorretos\n"), 0, (struct sockaddr *) &addr_client, slen);
+                }   
             }
         }
         //Fechar socket UDP
         printf("A fechar servidor UDP\n");
         close (s);  
     }
-
     return 0;
 }
 
