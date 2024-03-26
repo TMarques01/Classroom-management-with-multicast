@@ -113,14 +113,17 @@ void process_client(int client_fd, char *ficheiro){
     char buffer[BUFLEN];
 
     while(1) {
+
         nread = read(client_fd, buffer, BUFLEN-1);
         if (nread <= 0) break; 
+
+        
         buffer[nread] = '\0';
 
         char username[TAM];
         char password[TAM];
 
-        printf("%s\n", buffer);
+        printf("Client: %s\n", buffer);
 
         // Validar os dados (0 = nao logado; 1 = aluno; 2 = professor)
         if (login == 0){
@@ -179,7 +182,6 @@ void process_client(int client_fd, char *ficheiro){
                 write(client_fd, "LIST_SUBSCRIBED entrou", strlen("LIST_SUBSCRIBED entrou"));
             } else {
                 if (login == 1){ // Caso seja aluno
-                //printf("Aluno entrou\n");
 
                     if (strncmp(buffer,"SUBSCRIBE_CLASS", 15) == 0){
                         write(client_fd, "SUBSCRIBE_CLASS entrou", strlen("SUBSCRIBE_CLASS entrou"));
@@ -188,7 +190,7 @@ void process_client(int client_fd, char *ficheiro){
                     } 
                 }
                 else if (login == 2){ // Caso seja professor
-                    //printf("Professor entrou\n");
+
                     if (strncmp (buffer,"CREAT_CLASS", 11) == 0){
                         write(client_fd,"CREAT_CLASS entrou",strlen("CREAT_CLASS entrou"));
                     } else if (strncmp(buffer, "SEND", 4) == 0){
@@ -202,13 +204,14 @@ void process_client(int client_fd, char *ficheiro){
     }
 
     printf("A fechar cliente...\n");
-    close(client_fd);
 }
 
 //Funcao para lidar com o sinal (TCP)
 void treat_signal(int sig){
-    printf("Fechar o socket\n");
+
     close(fd);
+    while (wait(NULL)> 0);
+    printf("A fechar servidor TCP\n");
     exit(0);
 }
 
@@ -225,7 +228,7 @@ int main(int argc, char *argv[]){
         erro("Erro ao abrir ficheiro\n");
     }
     fclose(f);
-    
+
     //SERVIDOR TCP
     pid_t TCP_process = fork();
     if (TCP_process == 0){
@@ -250,9 +253,9 @@ int main(int argc, char *argv[]){
 
             while(waitpid(-1,NULL,WNOHANG)>0);
             client = accept(fd,(struct sockaddr *)&client_addr,(socklen_t *)&client_addr_size); 
+
             if (client > 0) {
                 if (fork() == 0) {
-                    
                     close(fd);
                     printf("Novo cliente!\n");
                     process_client(client,argv[3]);
@@ -263,7 +266,7 @@ int main(int argc, char *argv[]){
         }
         
         close(fd);
-          
+
     //SERVIDOR UDP
     } else {
 
@@ -274,7 +277,7 @@ int main(int argc, char *argv[]){
 
         // Cria um socket para recepção de pacotes UDP
         if((s=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1) {
-            erro("Erro na criação do socket"); //DFNEKFNEKFNQEFKEFNE
+            erro("Erro na criação do socket");
         }
 
         // Preenchimento da socket address structure (UDP)
@@ -295,7 +298,7 @@ int main(int argc, char *argv[]){
 
             //Mensagem recebida
             if ((recv_len = recvfrom(s, buf, BUFLEN, 0, (struct sockaddr*)&addr_client, &slen)) == -1) {
-                erro("Erro no recvfrom");  //DDJWDQWJBDQWJDBQWJDBWQJDBQWJBDQ
+                erro("Erro no recvfrom"); 
             }
 
             // Limpa o buffer buf para receber mais mensagens
@@ -303,7 +306,7 @@ int main(int argc, char *argv[]){
 
             printf("Administrador: %s", buf);
 
-                // Condição para fazer login
+            // Condição para fazer login
             if (login == 0){
 
                 char username[TAM];
@@ -361,20 +364,27 @@ int main(int argc, char *argv[]){
                 } else if (strncmp(buf,"LIST", 4) == 0){
                     printf("LIST entrou\n");
                     listar_utilizadores(lista_utilizadores);
-                } else if (strncmp(buf,"QUIT_SERVER",11) == 0) { //SAIR DO SERVIDOR
-                    sendto(s, "A fechar o servidor...\n", strlen("A fechar o servidor...\n"), 0, (struct sockaddr *) &addr_client, slen);
+
+                //SAIR DO SERVIDOR
+                } else if (strncmp(buf,"QUIT_SERVER",11) == 0) { 
+                    sendto(s, "CLOSING\n", strlen("CLOSING\n"), 0, (struct sockaddr *) &addr_client, slen);
+
                     kill(TCP_process, SIGTERM);
                     waitpid(TCP_process, NULL, 0); // Espera o filho terminar
                     break;
+
                 } else {
                     sendto(s, "Argumentos incorretos\n", strlen("Argumentos incorretos\n"), 0, (struct sockaddr *) &addr_client, slen);
                 }   
             }
         }
+
         //Fechar socket UDP
         printf("A fechar servidor UDP\n");
         close (s);  
     }
+
+
     return 0;
 }
 

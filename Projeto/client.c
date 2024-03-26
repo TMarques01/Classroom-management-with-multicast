@@ -44,9 +44,10 @@ int main(int argc, char *argv[]) {
 
     buffer[strcspn(buffer, "\n")] = 0;
 
-    if (strcmp(buffer, "QUIT_CLIENT") == 0) {
+    if ((strcmp(buffer, "QUIT_CLIENT") == 0) || strlen(buffer) == 0) {
       break;
     }
+
 
     // Enviar o valor para o servidor
     write(fd, buffer, strlen(buffer) + 1);

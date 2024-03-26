@@ -4,6 +4,7 @@
 #define SERVER_H
 
 #include <arpa/inet.h>
+#include <stdbool.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <netinet/in.h>
@@ -12,7 +13,14 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/socket.h>
+#include <sys/shm.h>
 #include <signal.h>
+#include <semaphore.h>
+#include <sys/ipc.h>
+#include <errno.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <time.h>
 
 
 #define BUFLEN 1024  // Tamanho do buffer
