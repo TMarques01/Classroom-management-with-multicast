@@ -15,6 +15,7 @@ int main(int argc, char *argv[]) {
   char endServer[100];
   char buffer[BUFF_SIZE];
   int fd, nread = 0;
+  
   struct sockaddr_in addr;
   struct hostent *hostPtr;
 
@@ -47,7 +48,6 @@ int main(int argc, char *argv[]) {
     if ((strcmp(buffer, "QUIT_CLIENT") == 0) || strlen(buffer) == 0) {
       break;
     }
-
 
     // Enviar o valor para o servidor
     write(fd, buffer, strlen(buffer) + 1);
