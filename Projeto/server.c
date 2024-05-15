@@ -2,13 +2,55 @@
 
 #include "server.h"
 
+// TO DO turams terem um numero maximo (nao esta a funcionar)
+
 struct sockaddr_in addr, client_addr, addr_server, addr_client;
-int fd, client, client_addr_size, s,recv_len;
+int fd, client, client_addr_size, s,recv_len, classes = 1;
 socklen_t slen = sizeof(addr_client);
 
 void erro(char *s){ 
 	perror(s);
 	exit(1);
+}
+
+// Função para retornar id de uma turma
+char* get_ip_by_class_name(const char* class_name) {
+    sem_wait(sem_class);
+
+    for (int i = 0; i < MAX_CLASSES; i++) {
+        if (strcmp(shared_m->classes[i].nome, "") != 0){
+            if (strcmp(shared_m->classes[i].nome, class_name) == 0) {
+                sem_post(sem_class);
+                return shared_m->classes[i].ip;
+            }
+        }
+
+    }
+
+    sem_post(sem_class);
+    return NULL;  // retorna NULL se a classe não for encontrada
+}
+
+// Função para incrementar valor da turma
+int increment_class_size(const char *class_name) {
+    sem_wait(sem_class);
+    for (int i = 0; i < MAX_CLASSES; i++) {
+        if (strcmp(shared_m->classes[i].nome, "") != 0){
+            if (strcmp(shared_m->classes[i].nome, class_name) == 0) {  // Compara o nome da classe com class_name.
+                if (shared_m->classes[i].tam_current < shared_m->classes[i].tam_max) {  // Verifica se há espaço disponível.
+                    shared_m->classes[i].tam_current++;  // Incrementa tam_current.
+                    sem_post(sem_class);
+                    return 1;
+                } else {
+                    sem_post(sem_class);
+                    return 0;
+                }
+            }
+        }
+    }
+    
+    sem_post(sem_class);
+    return 0;
 }
 
 // =============== Lista de Users ===============
@@ -66,6 +108,7 @@ void insere_utilizador(user u) {
             strcpy(shared_m->users[i].username, u.username);
             strcpy(shared_m->users[i].password, u.password);
             strcpy(shared_m->users[i].role, u.role);
+            shared_m->users[i].online_status = 0;
             break;
         } else {
             continue;
@@ -74,27 +117,31 @@ void insere_utilizador(user u) {
     sem_post(sem_user);
 }
 
-//Funcao para confirmar o login do administrador
+//Funcao para confirmar o login do administrador (RTRN = 0 -> admin; 2 -> aluno; 3 -> professor)
 int confirmar_login(char username_login[TAM], char password_login[TAM]){
 
     int count = 1;
     sem_wait(sem_user);
     for (int i = 0; i < MAX_USERS; i++) {
-
-        if (strcmp(shared_m->users[i].username, username_login) == 0 && strcmp(shared_m->users[i].password, password_login) == 0){
-                //Se for administrador
-            if (strcmp(shared_m->users[i].role, "administrador") == 0){
-                count = 0;
-            }
-            //Se tiver outro cargo
-            else if (strcmp(shared_m->users[i].role,"aluno") == 0){
-                count = 2;
-            } else if (strcmp(shared_m->users[i].role,"professor") == 0){
-                count = 3;
+        if (strcmp(shared_m->users[i].username, "") != 0){
+            if (shared_m->users[i].online_status != 1){
+                if (strcmp(shared_m->users[i].username, username_login) == 0 && strcmp(shared_m->users[i].password, password_login) == 0){
+                    //Se for administrador
+                    if (strcmp(shared_m->users[i].role, "administrador") == 0){
+                        count = 0;
+                    }
+                    //Se tiver outro cargo
+                    else if (strcmp(shared_m->users[i].role,"aluno") == 0){
+                        count = 2;
+                    } else if (strcmp(shared_m->users[i].role,"professor") == 0){
+                        count = 3;
+                    }
+                    shared_m->users[i].online_status = 1;
+                    break;
+                }
             }
         }
     }
-
     sem_post(sem_user);
     return count;
 }
@@ -187,6 +234,7 @@ void adicionar_utilizador(char *buffer) {
                 strcpy(shared_m->users[i].username, novo.username);
                 strcpy(shared_m->users[i].password, novo.password);
                 strcpy(shared_m->users[i].role, novo.role);
+                shared_m->users[i].online_status = 0;
                 flag = 1; // certificar que há espaço na lista de users
                 break;
             } else {
@@ -205,78 +253,6 @@ void adicionar_utilizador(char *buffer) {
 
 // ================== Lista de Class =======================
 
-
-// Função para adicionar uma nova aula à lista
-void adiciona_aula(class nova_aula) {
-    sem_wait(sem_class);
-    for (int i = 0; i < MAX_CLASSES; i++){
-        if (strcmp(shared_m->classes[i].nome, "") == 0){
-            strcpy(shared_m->classes[i].nome, nova_aula.nome);
-            strcpy(shared_m->classes[i].ip, nova_aula.ip);
-            strcpy(shared_m->classes[i].professor.username, nova_aula.professor.username);
-            shared_m->classes[i].tam_max = nova_aula.tam_max;
-            for (int j = 0; j < MAX_USERS_P_CLASS; j++){
-                if (strcmp(shared_m->classes[i].alunos[j].username, "") == 0){
-                    if (strcmp(nova_aula.alunos[i].username, "") != 0) strcpy(shared_m->classes[i].alunos[j].username, nova_aula.alunos[j].username);
-                }
-            }
-            break;
-        }
-    }
-    sem_post(sem_class);
-}
-
-// Função para ler aulas de um ficheiro
-void carrega_aulas_de_ficheiro(const char *nome_ficheiro) {
-    FILE *ficheiro = fopen(nome_ficheiro, "r");
-    if (ficheiro == NULL) {
-        perror("Erro ao abrir ficheiro");
-        exit(1);
-    }
-
-    char linha[TAM];
-    while (fgets(linha, TAM, ficheiro) != NULL) {
-        class aula;
-
-        // Tokeniza a linha para extrair nome, ip, professor e alunos
-        char *token = strtok(linha, "/");
-        strcpy(aula.nome, token);
-
-        token = strtok(NULL, "/");
-        strcpy(aula.ip, token);
-
-        token = strtok(NULL, "/");
-        aula.tam_max = atoi(token);
-
-        token = strtok(NULL, "/");
-        user prof;
-        strcpy(prof.username, token);
-        aula.professor = prof;
-
-        // Processar os alunos
-        token = strtok(NULL, "/");
-        int count = 0;
-
-        while (token != NULL) {
-            user novo_aluno;
-            strcpy(novo_aluno.username, token);
-            if (novo_aluno.username[strlen(novo_aluno.username) - 1] == '\n'){
-                novo_aluno.username[strlen(novo_aluno.username) - 1] = '\0';
-            }
-
-            strcpy(aula.alunos[count].username, token);
-            count++;
-            token = strtok(NULL, "/");
-        }
-        for (count + 1; count < MAX_USERS_P_CLASS; count++) strcpy(aula.alunos[count].username, "");
-        
-        // Adiciona a nova aula à lista
-        adiciona_aula(aula);
-    }
-
-    fclose(ficheiro);
-}
-
 // Função para imprimir os detalhes de uma aula (DEBUG)
 void imprime_aulas() {
     sem_wait(sem_class);
@@ -284,51 +260,16 @@ void imprime_aulas() {
         if (strcmp(shared_m->classes[i].nome, "") != 0){
             printf("Nome da Aula: %s\n", shared_m->classes[i].nome);
             printf("IP da Aula: %s\n", shared_m->classes[i].ip);
-            printf("Professor: %s\n", shared_m->classes[i].professor.username);
-            
-            printf("Alunos:");
-            for (int j = 0; j < MAX_USERS_P_CLASS; j++){
-                if (strcmp(shared_m->classes[i].alunos[j].username, "") != 0){
-                    printf("  %s", shared_m->classes[i].alunos[j].username);
-                }
-            }
-
+        
             printf("\n"); // Espaço entre aulas
         }
     }
     sem_post(sem_class);
 }
 
-// Função para salvar aulas em um ficheiro
-void salva_aulas_em_ficheiro(const char *nome_ficheiro) {
-    FILE *ficheiro = fopen(nome_ficheiro, "w");
-    if (ficheiro == NULL) {
-        perror("Erro ao abrir ficheiro para escrita");
-        exit(1);
-    }
-
-    sem_wait(sem_class);
-    for (int i = 0; i < MAX_CLASSES; i++){
-        if (strcmp(shared_m->classes[i].nome, "") != 0){
-            fprintf(ficheiro, "%s/%s/%d/%s", shared_m->classes[i].nome, shared_m->classes[i].ip, shared_m->classes[i].tam_max, shared_m->classes[i].professor.username);
-
-            for (int j = 0; j < MAX_USERS_P_CLASS; j++){
-                if (strcmp(shared_m->classes[i].alunos[j].username, "") != 0){
-                    fprintf(ficheiro, "/%s", shared_m->classes[i].alunos[j].username);
-                }
-            }
-            //fprintf(ficheiro, "\n");  // Nova linha após cada aula
-        }
-    }
-    sem_post(sem_class);
-
-    fclose(ficheiro);
-}
-
 // Função para listar apenas o nome das turmas
 void lista_nomes_turmas(int client_fd) {
     char aux[TAM] = "CLASS ";
-    //strcat(aux, "CLASS ");
 
     sem_wait(sem_class);
     for (int i = 0; i < MAX_CLASSES; i++){
@@ -341,47 +282,124 @@ void lista_nomes_turmas(int client_fd) {
     write(client_fd, aux, strlen(aux)); 
 }
 
-// Função auxiliar para verificar se um aluno está na lista de alunos de uma turma
-int aluno_esta_na_turma(char *nome_aluno, int i) {
+// Função para subscrever uma turma
+void subscribe_class(int client_fd, char *buffer){
+    char *nome_turma = strtok(buffer, " ");
+    nome_turma = strtok(NULL, " ");
+    if (nome_turma == NULL){
+        write(client_fd, "REJECTED", strlen("REJECTED"));
+    } else {
 
-    for (int j = 0; j < MAX_USERS_P_CLASS; j++){
-        if (strcmp(shared_m->classes[i].alunos[j].username, nome_aluno) == 0) {
-            sem_post(sem_class);
-            return 1; 
-        }            
-    }
-    
-    return 0; // Aluno não encontrado
-}
+        char *ip = get_ip_by_class_name(nome_turma);
 
-// Função para encontrar em quais turmas um aluno está inscrito
-void buscar_turmas_do_aluno(char *nome_aluno, int client_fd) {
-
-    sem_wait(sem_class);
-    char turma[256] = "CLASS ";
-    char aux_[124] = {0};
-    for (int i = 0; i < MAX_CLASSES; i++){
-        if (strcmp(shared_m->classes[i].nome, "") != 0){
-            if (aluno_esta_na_turma(nome_aluno, i)) {
-                strcat(aux_, shared_m->classes[i].nome);
-                strcat(aux_,"/");
-                strcat(aux_, shared_m->classes[i].ip);
-                strcat(turma, aux_);
-                strcat(turma, " ");   
-                memset(aux_, 0, sizeof(aux_));
+        if (ip == NULL){
+            write(client_fd, "CLASS DOES NOT EXIST", strlen("CLASS DOES NOT EXIST"));
+        } else {
+            if (increment_class_size(nome_turma) == 1){
+                char aux[124];
+                sprintf(aux, "ACCEPTED %s", ip);
+                write(client_fd, aux, strlen(aux));
+            } else {
+                write(client_fd, "REJECTED", strlen("REJECTED")); 
             }
         }
     }
+}
+
+// Função para enviar mensagem para as respectivas aulas
+void enviar_mensagem_turma(int client_fd, struct sockaddr_in multicast_addr , char *buffer, int multicast_socket){
+    char *token = strtok(buffer, " ");
+    token = strtok(NULL, " "); // getting the name of the class
+
+    if (token == NULL){
+        write(client_fd, "REJECTED", strlen("REJECTED"));
+    } else {
+
+        char *ip = get_ip_by_class_name(token);
+        if (ip != NULL){
+
+            //multicast_addr.sin_addr = inet_aton(ip);
+            if (inet_aton(ip, &multicast_addr.sin_addr)){
+                token = strtok(NULL, " ");
+
+                if (sendto(multicast_socket, token, strlen(token), 0, (struct sockaddr*)&multicast_addr, sizeof(multicast_addr)) < 0)
+                    perror("Error sending news to multicast group");
+                
+                write(client_fd, "MENSAGE SENT", strlen("MENSAGE SENT"));
+            } else {
+
+                write(client_fd, "INVALID IP", strlen("INVALID IP"));
+            }
+        } else {
+            write(client_fd, "REJECTED", strlen("REJECTED"));
+        }
+    }
+}
+
+// Função para criar uma turma
+void creat_class(int client_fd, char *buffer){
+    char *token = strtok(buffer, " ");
+    token = strtok(NULL, " ");
+    
+    sem_wait(sem_class);
+
+    if (token != NULL){
+        for (int i = 0; i < MAX_CLASSES; i++){
+            if (strcmp(shared_m->classes[i].nome, "") == 0){
+
+                strcpy(shared_m->classes[i].nome, token);
+
+                token = strtok(NULL, " ");
+
+                if (token == NULL){
+                    strcpy(shared_m->classes[i].nome, "");
+                    write(client_fd, "REJECTED", strlen("REJECTED"));
+                    break;
+                }
+
+                shared_m->classes[i].tam_max = atoi(token); // atribui valor máximo à turma
+
+                unsigned long ip_num = htonl(0xEF000000 + classes);
+                struct in_addr ip_addr;
+                ip_addr.s_addr = ip_num;
+                
+                char* ip_str = inet_ntoa(ip_addr);
+                strcpy(shared_m->classes[i].ip, ip_str);
+                shared_m->classes[i].tam_current = 0;
+
+                char write_buffer[64 + TAM];
+                sprintf(write_buffer, "OK %s", shared_m->classes[i].ip);
+
+                write(client_fd, write_buffer, strlen(write_buffer));
+                classes++;
+                break;
+            }
+        }
+    } else {
+        write(client_fd, "REJECTED", strlen("REJECTED"));
+    }
 
     sem_post(sem_class);
-    write(client_fd, turma, strlen(turma));
-
 }
 
 // =============================================
 
 //Função para clientes TCP
 void process_client(int client_fd, char *ficheiro){
+
+    int multicast_socket; //multicast socket
+    struct sockaddr_in multicast_addr;
+    memset(&multicast_addr, 0, sizeof(multicast_addr));
+
+    multicast_addr.sin_family = AF_INET;
+    multicast_addr.sin_port = htons(MULTICAST_PORT);
+
+    if ((multicast_socket = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
+        perror("Error creating socket for multicast group");
+
+    int ttl_value = 128; //increase packet life time
+    if (setsockopt(multicast_socket, IPPROTO_IP, IP_MULTICAST_TTL, &ttl_value, sizeof(ttl_value)) < 0)
+        perror("Error enabling multicast on socket");
 
     int login = 0;
     int login_verificar = 0;
@@ -392,7 +410,6 @@ void process_client(int client_fd, char *ficheiro){
 
         nread = read(client_fd, buffer, BUFLEN-1);
         if (nread <= 0) break; 
-
         
         buffer[nread] = '\0';
 
@@ -455,22 +472,22 @@ void process_client(int client_fd, char *ficheiro){
             if (strncmp (buffer,"LIST_CLASSES", 12) == 0){ 
                 lista_nomes_turmas(client_fd);
             } else if (strncmp(buffer, "LIST_SUBSCRIBED", 15) == 0){ 
-                buscar_turmas_do_aluno(username, client_fd);
+                write(client_fd, "OK", strlen("OK"));
             } else {
                 if (login == 1){ // Caso seja aluno
 
                     if (strncmp(buffer,"SUBSCRIBE_CLASS", 15) == 0){
-                        write(client_fd, "SUBSCRIBE_CLASS entrou", strlen("SUBSCRIBE_CLASS entrou"));
+                        subscribe_class(client_fd, buffer);
                     } else {
                         write(client_fd, "REJECTED", strlen("REJECTED"));
                     } 
                 }
                 else if (login == 2){ // Caso seja professor
 
-                    if (strncmp (buffer,"CREAT_CLASS", 11) == 0){
-                        write(client_fd,"CREAT_CLASS entrou",strlen("CREAT_CLASS entrou"));
+                    if (strncmp (buffer,"CREATE_CLASS", 12) == 0){
+                        creat_class(client_fd, buffer);
                     } else if (strncmp(buffer, "SEND", 4) == 0){
-                        write(client_fd,"SEND entrou", strlen("SEND entrou"));
+                        enviar_mensagem_turma(client_fd, multicast_addr, buffer, multicast_socket);
                     } else {
                         write(client_fd, "REJECTED", strlen("REJECTED"));
                     }       
@@ -540,23 +557,15 @@ int main(int argc, char *argv[]){
     for (int i = 0; i < MAX_USERS; i++){
         shared_m->users[i] = (user){.username = "",
                                     .password = "",
-                                    .role = ""};
+                                    .role = "",
+                                    .online_status = 0};
     }
 
     for (int i = 0; i < MAX_CLASSES; i++){
         shared_m->classes[i] = (class){ .nome = "",
                                         .ip = "",
                                         .tam_max = -999,
-                                        .professor.password = "",
-                                        .professor.role = "",
-                                        .professor.username = ""};
-                                        
-        for (int j = 0; j < MAX_USERS_P_CLASS; j++){
-            shared_m->classes[i].alunos[j] = (user){
-            .password= "",
-            .role = "",
-            .username = ""};
-        }
+                                        .tam_current = -999};
     }
     
 
@@ -566,10 +575,6 @@ int main(int argc, char *argv[]){
 
     sem_unlink(CLASS_SEM);
     sem_class = sem_open(CLASS_SEM, O_CREAT | O_EXCL, 0777, 1);
-
-
-    carrega_aulas_de_ficheiro("aulas.txt");
-    imprime_aulas();
 
     ler_ficheiro(argv[3]); // Ler ficheiro dos alunos
     listar_utilizadores();
@@ -721,7 +726,6 @@ int main(int argc, char *argv[]){
           
                     // Guardar nos ficheiros as listas ligadas;
                     escrever_lista_para_arquivo();
-                    salva_aulas_em_ficheiro("aulas.txt");
 
                     sendto(s, "CLOSING\n", strlen("CLOSING\n"), 0, (struct sockaddr *) &addr_client, slen);
 
@@ -735,7 +739,7 @@ int main(int argc, char *argv[]){
                     sem_unlink(CLASS_SEM);
 
                     // Fechar memoria partilhada
-                    if(shmdt(shared_m)== -1) ("ERROR IN shmdt");
+                    if(shmdt(shared_m)== -1) printf ("ERROR IN shmdt");
 	                if(shmctl(shm_id, IPC_RMID, NULL) == -1) printf("ERROR IN shmctl");  
                     break;
 

@@ -28,7 +28,9 @@
 #define TAM 64      // Tamanho do username/password
 #define MAX_USERS 50
 #define MAX_CLASSES 50 
-#define MAX_USERS_P_CLASS 10
+#define MAX_USERS_P_CLASS 100
+
+#define MULTICAST_PORT 8888
 
 #define USER_SEM "user_sem"
 #define CLASS_SEM "class_sem"
@@ -38,17 +40,18 @@ typedef struct {
     char username[TAM];
     char password[TAM];
     char role[TAM];
+    int online_status;
 }user;
 
 // Estrutura para armazenar informações das aulals
 typedef struct {
-    user alunos[MAX_USERS_P_CLASS];
-    user professor;
     char nome[TAM];
     char ip[TAM];
     int tam_max;
+    int tam_current;
 }class;
 
+// Shared Memory struct
 typedef struct{
     user *users;
     class *classes;
@@ -73,12 +76,9 @@ void listar_utilizadores();
 // ============== TCP ==============
 void process_client(int client_fd, char *ficheiro);
 void treat_signal(int fd);
-/*
-no_lista* create_student_list();
-void add_student_to_class(no_lista **head, char *nome);
-void add_class_to_list(class_list list, struct class new_class);
-void load_classes_from_file(const char *filename, class_list list);
-void print_students(const no_lista *head);
-void print_classes(const class_list list);
-*/
+
+void subscribe_class(int client_fd, char *buffer);
+void creat_class(int client_fd, char *buffer);
+int increment_class_size(const char *class_name);
+
 #endif // SERVER_H
