@@ -19,12 +19,13 @@ int num_groups = 0;
 char ips[MAX_GROUPS][16]; // array de ips
 char name_classes[MAX_GROUPS][BUFF_SIZE]; // array de nomes de turmas
 struct ip_mreq mreqs[MAX_GROUPS];
+char username[BUFF_SIZE];
 
 void erro(char *msg);
 void join_group(char group[], int port, char name_class[]);
 void* listen_group(void* arg);
 void close_connections();
-void sigint_handler();
+void sigint_handler(int sgn);
 void print_subscribed_classes();
 
 int main(int argc, char *argv[]) {
@@ -63,6 +64,11 @@ int main(int argc, char *argv[]) {
         buffer_write[strcspn(buffer_write, "\n")] = 0;
 
         if ((strcmp(buffer_write, "QUIT_CLIENT") == 0) || strlen(buffer_write) == 0){
+            char buffer_final[BUFF_SIZE] = "QUIT_CLIENT ";
+            strcat(buffer_final, username);
+
+            write(fd, buffer_final, strlen(buffer_final) + 1);
+
             close_connections();
             break;
         } 
@@ -76,13 +82,21 @@ int main(int argc, char *argv[]) {
             buffer_read[nread] = '\0';
             printf("%s\n", buffer_read);
 
-            // Verifica o valor recebido, para adicionar ao grupo multicast
-            if (strncmp(buffer_write, "SUBSCRIBE_CLASS", strlen("SUBSCRIBE_CLASS")) == 0 && strcmp(buffer_read, "REJECTED") != 0) {
-                join_group(buffer_read, atoi(argv[2]), buffer_write);
-            // Listar as turmas inscritas
+            if (strncmp(buffer_write, "LOGIN", 5) == 0 && strcmp(buffer_read, "REJECTED") != 0) {
+
+                strcpy(username, buffer_write);
+                char *token = strtok(username, " ");
+                token = strtok(NULL, " ");
+                printf("token %s\n", token);
+                strcpy(username, token);
+
             } else if (strncmp(buffer_write, "LIST_SUBSCRIBED", strlen("LIST_SUBSCRIBED")) == 0 && strcmp(buffer_read, "REJECTED") != 0) {
-                print_subscribed_classes();
-            }
+                print_subscribed_classes();            // Listar as turmas inscritas
+            } else if (strncmp(buffer_write, "SUBSCRIBE_CLASS", strlen("SUBSCRIBE_CLASS")) == 0 && strcmp(buffer_read, "REJECTED") != 0) {
+                join_group(buffer_read, atoi(argv[2]), buffer_write);
+            } 
+
+       
         } 
 
         memset(buffer_write, 0, sizeof(buffer_write));        

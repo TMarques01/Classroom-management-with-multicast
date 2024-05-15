@@ -53,6 +53,18 @@ int increment_class_size(const char *class_name) {
     return 0;
 }
 
+//
+int modify_online_status(const char *nome){
+    for (int i = 0; i < MAX_USERS; i++){
+        if (strcmp(shared_m->users[i].username, "") != 0){
+            if (strcmp(shared_m->users[i].username, nome) == 0){
+                shared_m->users[i].online_status = 0;
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
 // =============== Lista de Users ===============
 
 // Função auxiliar para verificar se um user já existe na lista
@@ -469,18 +481,19 @@ void process_client(int client_fd, char *ficheiro){
         // Login efetuado
         } else if (login == 1 || login == 2){
 
-            if (strncmp (buffer,"LIST_CLASSES", 12) == 0){ 
+            if (strncmp (buffer,"LIST_CLASSES", 12) == 0) { 
                 lista_nomes_turmas(client_fd);
-            } else if (strncmp(buffer, "LIST_SUBSCRIBED", 15) == 0){ 
+            } else if (strncmp(buffer, "LIST_SUBSCRIBED", 15) == 0) { 
                 write(client_fd, "OK", strlen("OK"));
+            } else if (strncmp(buffer,"SUBSCRIBE_CLASS", 15) == 0) {
+                subscribe_class(client_fd, buffer);
+            } else if (strncmp(buffer, "QUIT_CLIENT", 11) == 0) {
+                char *token = strtok(buffer, " ");
+                token = strtok(NULL, " ");
+                if (!modify_online_status(token)) printf("ERROR IN MODIFY ONLINE STATUS\n");
             } else {
                 if (login == 1){ // Caso seja aluno
-
-                    if (strncmp(buffer,"SUBSCRIBE_CLASS", 15) == 0){
-                        subscribe_class(client_fd, buffer);
-                    } else {
-                        write(client_fd, "REJECTED", strlen("REJECTED"));
-                    } 
+                    write(client_fd, "REJECTED", strlen("REJECTED"));
                 }
                 else if (login == 2){ // Caso seja professor
 
@@ -584,6 +597,8 @@ int main(int argc, char *argv[]){
     //SERVIDOR TCP
     pid_t TCP_process = fork();
     if (TCP_process == 0){
+
+        signal(SIGTSTP, SIG_IGN);
         
         bzero((void *) &addr, sizeof(addr));
         addr.sin_family = AF_INET;
@@ -643,6 +658,8 @@ int main(int argc, char *argv[]){
         int login_verificar = 0;
 
         while (1){
+
+            signal(SIGTSTP, SIG_IGN);
 
             //Mensagem recebida
             if ((recv_len = recvfrom(s, buf, BUFLEN, 0, (struct sockaddr*)&addr_client, &slen)) == -1) {
