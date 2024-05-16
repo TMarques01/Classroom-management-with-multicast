@@ -1,3 +1,8 @@
-utilizador;password;administrador
+maneiro;password;aluno
 tiago;password;aluno
-hugo;password;professor
+utilizador;password;administrador
+hugo;password;aluno
+alberto;pass;aluno
+diogo;password;professor
+meu;menino;aluno
+lara;password;aluno

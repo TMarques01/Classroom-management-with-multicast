@@ -87,7 +87,6 @@ int main(int argc, char *argv[]) {
                 strcpy(username, buffer_write);
                 char *token = strtok(username, " ");
                 token = strtok(NULL, " ");
-                printf("token %s\n", token);
                 strcpy(username, token);
 
             } else if (strncmp(buffer_write, "LIST_SUBSCRIBED", strlen("LIST_SUBSCRIBED")) == 0 && strcmp(buffer_read, "REJECTED") != 0) {
