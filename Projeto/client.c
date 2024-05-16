@@ -82,7 +82,7 @@ int main(int argc, char *argv[]) {
             buffer_read[nread] = '\0';
             printf("%s\n", buffer_read);
 
-            if (strncmp(buffer_write, "LOGIN", 5) == 0 && strcmp(buffer_read, "REJECTED") != 0) {
+            if (strncmp(buffer_write, "LOGIN", 5) == 0 && strcmp(buffer_read, "REJECTED") != 0) { // guardar o username
 
                 strcpy(username, buffer_write);
                 char *token = strtok(username, " ");
@@ -90,12 +90,10 @@ int main(int argc, char *argv[]) {
                 strcpy(username, token);
 
             } else if (strncmp(buffer_write, "LIST_SUBSCRIBED", strlen("LIST_SUBSCRIBED")) == 0 && strcmp(buffer_read, "REJECTED") != 0) {
-                print_subscribed_classes();            // Listar as turmas inscritas
+                print_subscribed_classes(); // Listar as turmas inscritas
             } else if (strncmp(buffer_write, "SUBSCRIBE_CLASS", strlen("SUBSCRIBE_CLASS")) == 0 && strcmp(buffer_read, "REJECTED") != 0) {
-                join_group(buffer_read, atoi(argv[2]), buffer_write);
+                join_group(buffer_read, atoi(argv[2]), buffer_write); // ligar ao ip de multicast
             } 
-
-       
         } 
 
         memset(buffer_write, 0, sizeof(buffer_write));        
@@ -112,6 +110,7 @@ void erro(char *msg) {
     exit(-1);
 }
 
+// Ligar o socket ao ip de multicast e guardar a turma
 void join_group(char group[], int port, char name[]){
     
     struct sockaddr_in addr;
@@ -155,7 +154,7 @@ void join_group(char group[], int port, char name[]){
     }
 
     //add to mreq struct array
-    mreqs[num_groups-0] = mreq;
+    mreqs[num_groups] = mreq;
 
     //start listening thread
     pthread_t thread;
@@ -167,6 +166,7 @@ void join_group(char group[], int port, char name[]){
     num_groups++;
 }
 
+// Thread para ouvir um determinado ip de multicast
 void* listen_group(void* arg) {
     int socket = *(int*)arg;
 
@@ -196,6 +196,7 @@ void sigint_handler(int sgn){
     exit(0);
 }
 
+// Fechar as conexões
 void close_connections(){
     for(int i=0; i<num_groups; i++){
         if (setsockopt(sockets[i], IPPROTO_IP, IP_DROP_MEMBERSHIP, &mreqs[i], sizeof(mreqs[i])) < 0) {
@@ -206,6 +207,7 @@ void close_connections(){
     }
 }
 
+// Dar print às turmas subscritas
 void print_subscribed_classes(){
     int first = 1;  // Flag para controlar a adição de vírgulas.
     int found = 0;  // Flag para verificar se algum grupo foi adicionado.

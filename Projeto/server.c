@@ -13,7 +13,7 @@ void erro(char *s){
 	exit(1);
 }
 
-// Função para retornar id de uma turma
+// Retornar ip de uma turma
 char* get_ip_by_class_name(const char* class_name) {
     sem_wait(sem_class);
 
@@ -31,7 +31,7 @@ char* get_ip_by_class_name(const char* class_name) {
     return NULL;  // retorna NULL se a classe não for encontrada
 }
 
-// Função para incrementar valor da turma
+// Incrementar tamanho da turma
 int increment_class_size(const char *class_name) {
     sem_wait(sem_class);
     for (int i = 0; i < MAX_CLASSES; i++) {
@@ -53,7 +53,7 @@ int increment_class_size(const char *class_name) {
     return 0;
 }
 
-//
+// Colocar um determinado user offline
 int modify_online_status(const char *nome){
     for (int i = 0; i < MAX_USERS; i++){
         if (strcmp(shared_m->users[i].username, "") != 0){
@@ -77,7 +77,7 @@ int verificar_user_existe(const char *username) {
     return 0;  //se user ainda não exite
 }
 
-//Função para ler ficheiro e adicionar à lista ligada
+//Função para ler ficheiro e adicionar ao array
 void ler_ficheiro(char *ficheiro) {
 
     FILE *file;
@@ -111,7 +111,7 @@ void ler_ficheiro(char *ficheiro) {
     fclose(file);
 }
 
-//Função para inserir utilizador na lista ligada
+//Função para inserir utilizador no array
 void insere_utilizador(user u) {
 
     sem_wait(sem_user);
@@ -171,7 +171,7 @@ void listar_utilizadores() {
     }
 }
 
-// Eliminar utilizadores da lista
+// Eliminar utilizadores do array
 int eliminar_utilizador(char *buffer) {
     char *username = buffer + 4;
     username[strcspn(username, "\n")] = '\0';
@@ -193,7 +193,7 @@ int eliminar_utilizador(char *buffer) {
     return 0;  // Retornar 0 indica que o usuário não foi encontrado
 }
 
-// Função para adicionar um usuário no início da lista
+// Função para adicionar um usuário ao array
 void adicionar_utilizador(char *buffer) {
 
     user novo; 
@@ -318,7 +318,7 @@ void subscribe_class(int client_fd, char *buffer){
     }
 }
 
-// Função para enviar mensagem para as respectivas aulas
+// Função para enviar mensagem para as respectivas turmas
 void enviar_mensagem_turma(int client_fd, struct sockaddr_in multicast_addr , char *buffer, int multicast_socket){
     char *token = strtok(buffer, " ");
     token = strtok(NULL, " "); // getting the name of the class
@@ -522,7 +522,7 @@ void treat_signal(int sig){
 }
 
 // Função para escrever a lista para um arquivo
-void escrever_lista_para_arquivo() {
+void escrever_para_arquivo() {
     FILE *arquivo = fopen("ficheiro.txt", "w");  // Abrir o arquivo para escrita
     if (arquivo == NULL) {
         perror("Falha ao abrir arquivo");

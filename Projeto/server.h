@@ -86,7 +86,7 @@ void adicionar_utilizador(char *buffer);
 
 // Funções de sinal e de arquivo
 void treat_signal(int sig);
-void escrever_lista_para_arquivo(void);
+void escrever_para_arquivo(void);
 int modify_online_status(const char *nome);
 
 // Funções do servidor
